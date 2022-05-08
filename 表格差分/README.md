@@ -1,5 +1,9 @@
 # 表格差分
-输入两个文件, 比较二者相同名字的sheet  
+diff.json: 输入两个文件, 比较二者相同名字的sheet  
+diff_folder.json: 输入两个文件夹, 毕竟二者的同名文件
+### 参数
+zoom: 生成的sheet的缩放比
+freeze: 是否固定比较结果左侧内容
 **需包含Diff.dll**
 ## 图例
 例一:  
