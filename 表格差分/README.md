@@ -3,7 +3,8 @@ diff_folder.json: 比较同名文件. 如果只有两个文件, 则直接比较�
 ### 参数
 zoom: 生成的sheet的缩放比  
 freeze: 是否固定比较结果左侧内容  
-diffStyle: 是否比较样式  
+Display: 差分结果显示模式  
+DiffOption: 差分选项  
 
 **需包含Diff.dll**  
 **需包含System.Drawing.dll**  
