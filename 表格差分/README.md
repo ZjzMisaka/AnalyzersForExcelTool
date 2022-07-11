@@ -5,6 +5,7 @@ zoom: 生成的sheet的缩放比
 freeze: 是否固定比较结果左侧内容  
 Display: 差分结果显示模式  
 DiffOption: 差分选项  
+SameLine: 比较结果相同的行显示方式  
 
 **需包含Diff.dll**  
 **需包含System.Drawing.dll**  
