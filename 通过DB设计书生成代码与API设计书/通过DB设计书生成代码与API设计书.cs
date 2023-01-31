@@ -417,11 +417,31 @@ namespace AnalyzeCode
             strList.Add(MakeLevel(level) + " */");
         }
         
-        public void MakeAnnotation(List<string> strList, Column column, int level)
+        public void MakeAnnotation(List<string> strList, Column column, int level, List<string> importList)
         {
             if (column.notNull)
             {
+                if (!importList.Contains("import javax.validation.constraints.NotBlank;"))
+                {
+                    importList.Add("import javax.validation.constraints.NotBlank;");
+                }
                 strList.Add(MakeLevel(level) + "@NotBlank");
+            }
+            if (column.digitsCheck >= 0)
+            {
+                if (!importList.Contains("import org.hibernate.validator.constraints.Length;"))
+                {
+                    importList.Add("import org.hibernate.validator.constraints.Length;");
+                }
+                strList.Add(MakeLevel(level) + "@Length(min = 0, max = " + column.digitsCheck + ")");
+            }
+            if (column.decimalCheck >= 0)
+            {
+                if (!importList.Contains("import javax.validation.constraints.Digits;"))
+                {
+                    importList.Add("import javax.validation.constraints.Digits;");
+                }
+                strList.Add(MakeLevel(level) + "@Digits(integer = " + (column.digitsCheck - (column.decimalCheck == 0 ? 0 : 1) - column.decimalCheck) + ", fraction = " + column.decimalCheck + ")");
             }
         }
         
@@ -521,7 +541,7 @@ namespace AnalyzeCode
                 MakeDocComment(body, new List<string>() {column.colName}, 1);
                 if (param.GetOne("EnableValidate") == "Yes")
                 {
-                    MakeAnnotation(body, column, 1);
+                    MakeAnnotation(body, column, 1, importList);
                 }
                 MakeProperty(body, column, 1, param, importList);
             }
