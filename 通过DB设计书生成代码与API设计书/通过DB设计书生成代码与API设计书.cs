@@ -677,7 +677,7 @@ namespace AnalyzeCode
             {
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
-            body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + "FROM ");
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(1) + "</select>");
