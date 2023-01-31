@@ -205,6 +205,7 @@ namespace AnalyzeCode
             {
                 Logger.Info("Making entity: " + table.tableID + ", " + table.tableName + "...");
                 MakeEntityFile(table, param, Output.OutputPath);
+                Logger.Info("Making mapper: " + table.tableID + ", " + table.tableName + "...");
                 MakeMapperFile(table, param, Output.OutputPath);
                 // ConvertMapperIntoExcel
             }
@@ -595,6 +596,15 @@ namespace AnalyzeCode
                 body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "更新 -->");
                 MakeUpdateByKey(body, param, table, convertDic);
             }
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "ページング検索 -->");
+            MakeSelectPage(body, param, table, convertDic);
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを追加 -->");
+            MakeInsertMultipleByKey(body, param, table, convertDic);
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを削除 -->");
+            MakeDeleteMultipleByKey(body, param, table, convertDic);
             body.Add("</mapper>");
             
             string outputPath = System.IO.Path.Combine(path, UnderScoreCaseToCamelCase(table.tableID, true) + "Mapper.xml");
@@ -626,6 +636,7 @@ namespace AnalyzeCode
             
             body.Add(MakeLevel(2) + "SELECT COUNT(1)");
             body.Add(MakeLevel(2) + "FROM " + table.tableID.ToUpper() + "");
+            body.Add(MakeLevel(2) + "WHERE");
             if (table.hasPrimaryKey)
             {
                 body.Add(MakeLevel(2) + "1 = 1");
@@ -652,7 +663,9 @@ namespace AnalyzeCode
                 }
                 else
                 {
+                    body.Add(MakeLevel(2) + "<!-- TODO Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper() + " -->");
                     Logger.Warn("Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper());
+                    Logger.Warn("Search <!-- TODO Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper() + " --> to fix it");
                 }
             }
             
@@ -790,6 +803,71 @@ namespace AnalyzeCode
             }
             
             body.Add(MakeLevel(1) + "</update>");
+        }
+        
+        public void MakeSelectPage(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        {
+            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Page\" resultMap=\"ResultMap\">");
+            body.Add(MakeLevel(2) + "SELECT");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
+            }
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body.Add(MakeLevel(2) + "FROM ");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "<if test=\"orderCol != null and orderCol !=''\">");
+            body.Add(MakeLevel(3) + "ORDER BY ${orderCol}");
+            body.Add(MakeLevel(3) + "<if test=\"order != null and order !=''\">");
+            body.Add(MakeLevel(4) + "${order}");
+            body.Add(MakeLevel(3) + "</if>");
+            body.Add(MakeLevel(2) + "</if>");
+            body.Add(MakeLevel(2) + "limit #{itemPerPage} offset #{offset}");
+            body.Add(MakeLevel(1) + "</select>");
+        }
+        
+        public void MakeInsertMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        {
+            body.Add(MakeLevel(1) + "<insert id=\"insertMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
+            body.Add(MakeLevel(2) + "INSERT INTO " + table.tableID.ToUpper() + " (");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
+            }
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body.Add(MakeLevel(2) + ") VALUES");
+            body.Add(MakeLevel(2) + "<foreach collection=\"list\" separator=\",\" item=\"entity\" open=\"(\" close=\")\">");
+            foreach (Column column in table.columnList)
+            {
+                if (column.colID.ToUpper() == param.GetOne("UpdateTimeId").ToUpper() || column.colID.ToUpper() == param.GetOne("CreateTimeId").ToUpper())
+                {
+                    body.Add(MakeLevel(3) + GetNowTimestampStr(param) + ",");
+                }
+                else
+                {
+                    body.Add(MakeLevel(3) + "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "},");
+                }
+            }
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body.Add(MakeLevel(2) + "</foreach>");
+            body.Add(MakeLevel(1) + "</insert>");
+        }
+        
+        public void MakeDeleteMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        {
+            body.Add(MakeLevel(1) + "<delete id=\"deleteMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
+            body.Add(MakeLevel(2) + "DELETE FROM " + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "WHERE");
+            body.Add(MakeLevel(2) + "<foreach collection=\"list\" separator=\"or\" item=\"entity\" open=\"(\" close=\")\">");
+            body.Add(MakeLevel(3) + "1 = 1");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeLeftEqualRight(column, 4, "AND "));
+                body.Add(MakeLevel(3) + "</if>");
+            }
+            body.Add(MakeLevel(2) + "</foreach>");
+            body.Add(MakeLevel(1) + "</delete>");
         }
     }
 }
