@@ -417,15 +417,28 @@ namespace AnalyzeCode
             strList.Add(MakeLevel(level) + " */");
         }
         
-        public void MakeAnnotation(List<string> strList, Column column, int level, List<string> importList)
+        public void MakeAnnotation(List<string> strList, Column column, int level, List<string> importList, Param param)
         {
+            Dictionary<string, string> dic = GetConvertDic(param);
+        
             if (column.notNull)
             {
-                if (!importList.Contains("import javax.validation.constraints.NotBlank;"))
+                if (GetJavaType(dic, column) == "String")
                 {
-                    importList.Add("import javax.validation.constraints.NotBlank;");
+                    if (!importList.Contains("import javax.validation.constraints.NotBlank;"))
+                    {
+                        importList.Add("import javax.validation.constraints.NotBlank;");
+                    }
+                    strList.Add(MakeLevel(level) + "@NotBlank");
                 }
-                strList.Add(MakeLevel(level) + "@NotBlank");
+                else
+                {
+                    if (!importList.Contains("import javax.validation.constraints.NotEmpty;"))
+                    {
+                        importList.Add("import javax.validation.constraints.NotEmpty;");
+                    }
+                    strList.Add(MakeLevel(level) + "@NotEmpty");
+                }
             }
             if (column.digitsCheck >= 0)
             {
@@ -541,7 +554,7 @@ namespace AnalyzeCode
                 MakeDocComment(body, new List<string>() {column.colName}, 1);
                 if (param.GetOne("EnableValidate") == "Yes")
                 {
-                    MakeAnnotation(body, column, 1, importList);
+                    MakeAnnotation(body, column, 1, importList, param);
                 }
                 MakeProperty(body, column, 1, param, importList);
             }
