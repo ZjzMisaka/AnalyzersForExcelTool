@@ -855,7 +855,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(4) + "${order}");
             body.Add(MakeLevel(3) + "</if>");
             body.Add(MakeLevel(2) + "</if>");
-            body.Add(MakeLevel(2) + "limit #{itemPerPage} offset #{offset}");
+            body.Add(MakeLevel(2) + "LIMIT #{itemPerPage} OFFSET #{offset}");
             body.Add(MakeLevel(1) + "</select>");
         }
         
