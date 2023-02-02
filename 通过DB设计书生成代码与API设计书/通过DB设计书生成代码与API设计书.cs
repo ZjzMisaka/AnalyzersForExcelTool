@@ -587,6 +587,16 @@ namespace AnalyzeCode
             return res;
         }
         
+        public void MakeOrder(List<string> body, int startlevel)
+        {
+            body.Add(MakeLevel(startlevel) + "<if test=\"orderCol != null and orderCol !=''\">");
+            body.Add(MakeLevel(startlevel + 1) + "ORDER BY ${orderCol}");
+            body.Add(MakeLevel(startlevel + 1) + "<if test=\"order != null and order !=''\">");
+            body.Add(MakeLevel(startlevel + 2) + "${order}");
+            body.Add(MakeLevel(startlevel + 1) + "</if>");
+            body.Add(MakeLevel(startlevel) + "</if>");
+        }
+        
         public void MakeMapperFile(Table table, Param param, string path)
         {
             Dictionary<string, string> convertDic = GetConvertDic(param);
@@ -603,10 +613,10 @@ namespace AnalyzeCode
                 MakeExclusiveCheck(body, param, table, convertDic);
             }
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 -->");
-            MakeSelectCount(body, param, table);
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 *entityパラメータは入力しなくてもよい -->");
+            MakeSelectCount(body, param, table, convertDic);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "全検索 -->");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 条件あり -->");
             MakeSelectAll(body, param, table);
             if (table.hasPrimaryKey)
             {
@@ -614,8 +624,11 @@ namespace AnalyzeCode
                 body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "主キーで検索 -->");
                 MakeSelectByKey(body, param, table, convertDic);
             }
-             body.Add("");
-             body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "作成 -->");
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 -->");
+            MakeSelect(body, param, table, convertDic);
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "作成 -->");
             MakeInsert(body, param, table, convertDic);
             if (table.hasPrimaryKey)
             {
@@ -705,13 +718,23 @@ namespace AnalyzeCode
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelectCount(List<string> body, Param param, Table table)
+        public void MakeSelectCount(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
         {
-            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Count\" resultType=\"java.lang.Integer\">");
+            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Count\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultType=\"java.lang.Integer\">");
             body.Add(MakeLevel(2) + "SELECT");
             body.Add(MakeLevel(2) + "COUNT(*)");
             body.Add(MakeLevel(2) + "FROM ");
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
+            body.Add(MakeLevel(3) + "WHERE");
+            body.Add(MakeLevel(3) + "1 = 1");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeLeftEqualRight(column, 4, "AND "));
+                body.Add(MakeLevel(3) + "</if>");
+            }
+            body.Add(MakeLevel(2) + "</if>");
             body.Add(MakeLevel(1) + "</select>");
         }
         
@@ -726,6 +749,7 @@ namespace AnalyzeCode
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + "FROM ");
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            MakeOrder(body, 2);
             body.Add(MakeLevel(1) + "</select>");
         }
         
@@ -751,6 +775,30 @@ namespace AnalyzeCode
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
+            MakeOrder(body, 2);
+            body.Add(MakeLevel(1) + "</select>");
+        }
+        
+        public void MakeSelect(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        {
+            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultMap=\"ResultMap\">");
+            body.Add(MakeLevel(2) + "SELECT");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
+            }
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body.Add(MakeLevel(2) + "FROM ");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "WHERE");
+            body.Add(MakeLevel(2) + "1 = 1");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeTestHead(convertDic, column, 2));
+                body.Add(MakeLeftEqualRight(column, 3, "AND "));
+                body.Add(MakeLevel(2) + "</if>");
+            }
+            MakeOrder(body, 2);
             body.Add(MakeLevel(1) + "</select>");
         }
         
@@ -849,12 +897,7 @@ namespace AnalyzeCode
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + "FROM ");
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
-            body.Add(MakeLevel(2) + "<if test=\"orderCol != null and orderCol !=''\">");
-            body.Add(MakeLevel(3) + "ORDER BY ${orderCol}");
-            body.Add(MakeLevel(3) + "<if test=\"order != null and order !=''\">");
-            body.Add(MakeLevel(4) + "${order}");
-            body.Add(MakeLevel(3) + "</if>");
-            body.Add(MakeLevel(2) + "</if>");
+            MakeOrder(body, 2);
             body.Add(MakeLevel(2) + "LIMIT #{itemPerPage} OFFSET #{offset}");
             body.Add(MakeLevel(1) + "</select>");
         }
