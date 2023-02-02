@@ -680,8 +680,10 @@ namespace AnalyzeCode
         {
             body.Add(MakeLevel(1) + "<select id=\"exclusiveCheck\" resultType=\"java.lang.Integer\">");
             
-            body.Add(MakeLevel(2) + "SELECT COUNT(1)");
-            body.Add(MakeLevel(2) + "FROM " + table.tableID.ToUpper() + "");
+            body.Add(MakeLevel(2) + "SELECT");
+            body.Add(MakeLevel(2) + "COUNT(1)");
+            body.Add(MakeLevel(2) + "FROM");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "WHERE");
             if (table.hasPrimaryKey)
             {
@@ -806,7 +808,8 @@ namespace AnalyzeCode
         {
             body.Add(MakeLevel(1) + "<insert id=\"insert" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\">");
 
-            body.Add(MakeLevel(2) + "INSERT INTO " + table.tableID.ToUpper() + " (");
+            body.Add(MakeLevel(2) + "INSERT INTO");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper() + " (");
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
@@ -833,7 +836,8 @@ namespace AnalyzeCode
         {
             body.Add(MakeLevel(1) + "<delete id=\"delete" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\">");
 
-            body.Add(MakeLevel(2) + "DELETE FROM " + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "DELETE FROM");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
@@ -905,7 +909,8 @@ namespace AnalyzeCode
         public void MakeInsertMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
         {
             body.Add(MakeLevel(1) + "<insert id=\"insertMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
-            body.Add(MakeLevel(2) + "INSERT INTO " + table.tableID.ToUpper() + " (");
+            body.Add(MakeLevel(2) + "INSERT INTO");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper() + " (");
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
@@ -932,7 +937,8 @@ namespace AnalyzeCode
         public void MakeDeleteMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
         {
             body.Add(MakeLevel(1) + "<delete id=\"deleteMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
-            body.Add(MakeLevel(2) + "DELETE FROM " + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "DELETE FROM");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "<foreach collection=\"list\" separator=\"or\" item=\"entity\" open=\"(\" close=\")\">");
             body.Add(MakeLevel(3) + "1 = 1");
