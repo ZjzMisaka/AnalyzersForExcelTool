@@ -616,7 +616,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 *entityパラメータは入力しなくてもよい -->");
             MakeSelectCount(body, param, table, convertDic);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 条件あり -->");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "全検索 -->");
             MakeSelectAll(body, param, table);
             if (table.hasPrimaryKey)
             {
@@ -627,6 +627,9 @@ namespace AnalyzeCode
             body.Add("");
             body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 -->");
             MakeSelect(body, param, table, convertDic);
+            body.Add("");
+            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 ソートあり -->");
+            MakeSelectWithOrder(body, param, table, convertDic);
             body.Add("");
             body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "作成 -->");
             MakeInsert(body, param, table, convertDic);
@@ -777,13 +780,34 @@ namespace AnalyzeCode
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
-            MakeOrder(body, 2);
             body.Add(MakeLevel(1) + "</select>");
         }
         
         public void MakeSelect(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
         {
             body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultMap=\"ResultMap\">");
+            body.Add(MakeLevel(2) + "SELECT");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
+            }
+            body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            body.Add(MakeLevel(2) + "FROM ");
+            body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "WHERE");
+            body.Add(MakeLevel(2) + "1 = 1");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeTestHead(convertDic, column, 2));
+                body.Add(MakeLeftEqualRight(column, 3, "AND "));
+                body.Add(MakeLevel(2) + "</if>");
+            }
+            body.Add(MakeLevel(1) + "</select>");
+        }
+        
+        public void MakeSelectWithOrder(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        {
+            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "WithOrder\" resultMap=\"ResultMap\">");
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
