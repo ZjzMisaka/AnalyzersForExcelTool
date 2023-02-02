@@ -405,7 +405,7 @@ namespace AnalyzeCode
         }
         
         
-         /** MAKE ENTITY START **************************************************************************************************/
+        /** MAKE ENTITY START **************************************************************************************************/
         
         public void MakeDocComment(List<string> strList, List<string> commentList, int level)
         {
