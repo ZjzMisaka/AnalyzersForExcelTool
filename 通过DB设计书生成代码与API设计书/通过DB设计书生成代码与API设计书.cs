@@ -568,10 +568,12 @@ namespace AnalyzeCode
         
         /** MAKE MAPPER START **************************************************************************************************/
         
-        public string MakeTestHead(Dictionary<string, string> convertDic, Column column, int level)
+        public string MakeTestHead(Param param, Dictionary<string, string> convertDic, Column column, int level)
         {
             string head = MakeLevel(level) + "<if test=\"entity." + UnderScoreCaseToCamelCase(column.colID) + " != null";
-            if (GetJavaType(convertDic, column) == "String")
+            // 当向Oracle中传""时Oracle会自动将其转换为null, 而Potgresql, SqlServer, MySql会保持为空字符串. 
+            // 因此对于一个NotNull字段, Postgresql, MySql和SqlServer中允许传""但Oracle不允许
+            if (column.notNull && GetJavaType(convertDic, column) == "String" && param.GetOne("DatabaseType") == "Oracle")
             {
                 head += " and entity." + UnderScoreCaseToCamelCase(column.colID) + " !=''";
             }
@@ -700,7 +702,7 @@ namespace AnalyzeCode
                     }
                     if (column.isPrimaryKey)
                     {
-                        body.Add(MakeTestHead(convertDic, column, 2));
+                        body.Add(MakeTestHead(param, convertDic, column, 2));
                         body.Add(MakeLeftEqualRight(column, 3, "AND "));
                         body.Add(MakeLevel(2) + "</if>");
                     }
@@ -708,7 +710,7 @@ namespace AnalyzeCode
                 
                 if (updateCol != null)
                 {
-                    body.Add(MakeTestHead(convertDic, updateCol, 2));
+                    body.Add(MakeTestHead(param, convertDic, updateCol, 2));
                     body.Add(MakeLeftEqualRight(updateCol, 3, "AND "));
                     body.Add(MakeLevel(2) + "</if>");
                 }
@@ -735,7 +737,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeTestHead(param, convertDic, column, 3));
                 body.Add(MakeLeftEqualRight(column, 4, "AND "));
                 body.Add(MakeLevel(3) + "</if>");
             }
@@ -775,7 +777,7 @@ namespace AnalyzeCode
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(convertDic, column, 2));
+                    body.Add(MakeTestHead(param, convertDic, column, 2));
                     body.Add(MakeLeftEqualRight(column, 3, "AND "));
                     body.Add(MakeLevel(2) + "</if>");
                 }
@@ -798,7 +800,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(convertDic, column, 2));
+                body.Add(MakeTestHead(param, convertDic, column, 2));
                 body.Add(MakeLeftEqualRight(column, 3, "AND "));
                 body.Add(MakeLevel(2) + "</if>");
             }
@@ -820,7 +822,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(convertDic, column, 2));
+                body.Add(MakeTestHead(param, convertDic, column, 2));
                 body.Add(MakeLeftEqualRight(column, 3, "AND "));
                 body.Add(MakeLevel(2) + "</if>");
             }
@@ -868,7 +870,7 @@ namespace AnalyzeCode
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(convertDic, column, 2));
+                    body.Add(MakeTestHead(param, convertDic, column, 2));
                     body.Add(MakeLeftEqualRight(column, 3, "AND "));
                     body.Add(MakeLevel(2) + "</if>");
                 }
@@ -886,7 +888,7 @@ namespace AnalyzeCode
             {
                 if (!column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(convertDic, column, 3));
+                    body.Add(MakeTestHead(param, convertDic, column, 3));
                     if (column.colID.ToUpper() == param.GetOne("UpdateTimeId").ToUpper())
                     {
                         body.Add(MakeLevel(4) + column.colID.ToUpper() + " = " + GetNowTimestampStr(param) + ", ");
@@ -905,7 +907,7 @@ namespace AnalyzeCode
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(convertDic, column, 2));
+                    body.Add(MakeTestHead(param, convertDic, column, 2));
                     body.Add(MakeLeftEqualRight(column, 3, "AND "));
                     body.Add(MakeLevel(2) + "</if>");
                 }
@@ -930,7 +932,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeTestHead(param, convertDic, column, 3));
                 body.Add(MakeLeftEqualRight(column, 4, "AND "));
                 body.Add(MakeLevel(3) + "</if>");
             }
@@ -978,7 +980,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeTestHead(param, convertDic, column, 3));
                 body.Add(MakeLeftEqualRight(column, 4, "AND "));
                 body.Add(MakeLevel(3) + "</if>");
             }
