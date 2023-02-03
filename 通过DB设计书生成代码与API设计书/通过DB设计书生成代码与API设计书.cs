@@ -925,6 +925,16 @@ namespace AnalyzeCode
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + "FROM ");
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
+            body.Add(MakeLevel(3) + "WHERE");
+            body.Add(MakeLevel(3) + "1 = 1");
+            foreach (Column column in table.columnList)
+            {
+                body.Add(MakeTestHead(convertDic, column, 3));
+                body.Add(MakeLeftEqualRight(column, 4, "AND "));
+                body.Add(MakeLevel(3) + "</if>");
+            }
+            body.Add(MakeLevel(2) + "</if>");
             MakeOrder(body, 2);
             body.Add(MakeLevel(2) + "LIMIT #{itemPerPage} OFFSET #{offset}");
             body.Add(MakeLevel(1) + "</select>");
