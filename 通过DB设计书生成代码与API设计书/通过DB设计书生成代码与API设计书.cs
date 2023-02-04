@@ -19,6 +19,8 @@ namespace AnalyzeCode
     
     public static class Converter
     {
+        public enum DicType { DesignBookType, DatabaseType };
+        
         public static Dictionary<string, string> postgresqlDic = new Dictionary<string, string>() 
         {
             {"date", "LocalDate"},
@@ -305,22 +307,31 @@ namespace AnalyzeCode
             return res;
         }
         
-        public Dictionary<string, string> GetConvertDic(Param param)
+        public Dictionary<string, string> GetConvertDic(Param param, Converter.DicType dicType)
         {
             Dictionary<string, string> convertDic;
-            if (param.GetOne("DatabaseType") == "Postgresql")
+            string key;
+            if (dicType == Converter.DicType.DatabaseType)
+            {
+                key = "DatabaseType";
+            }
+            else
+            {
+                key = "DesignBookType";
+            }
+            if (param.GetOne(key) == "Postgresql")
             {
                 convertDic = Converter.postgresqlDic;
             }
-            else if (param.GetOne("DatabaseType") == "SqlServer")
+            else if (param.GetOne(key) == "SqlServer")
             {
                 convertDic = Converter.sqlServerDic;
             }
-            else if (param.GetOne("DatabaseType") == "MySQL")
+            else if (param.GetOne(key) == "MySQL")
             {
                 convertDic = Converter.mySqlDic;
             }
-            else if (param.GetOne("DatabaseType") == "Oracle")
+            else if (param.GetOne(key) == "Oracle")
             {
                 convertDic = Converter.oracleDic;
             }
@@ -384,24 +395,7 @@ namespace AnalyzeCode
         
         public string GetNowTimestampStr(Param param)
         {
-            string res = "CURRENT_TIMESTAMP";
-            if (param.GetOne("DatabaseType") == "Postgresql")
-            {
-                res = "Now()";
-            }
-            else if (param.GetOne("DatabaseType") == "SqlServer")
-            {
-            
-            }
-            else if (param.GetOne("DatabaseType") == "MySQL")
-            {
-            
-            }
-            else if (param.GetOne("DatabaseType") == "Oracle")
-            {
-                res = "CURRENT_TIMESTAMP";
-            }
-            return res;
+            return "CURRENT_TIMESTAMP";
         }
         
         
@@ -419,7 +413,7 @@ namespace AnalyzeCode
         
         public void MakeAnnotation(List<string> strList, Column column, int level, List<string> importList, Param param)
         {
-            Dictionary<string, string> dic = GetConvertDic(param);
+            Dictionary<string, string> dic = GetConvertDic(param, Converter.DicType.DesignBookType);
         
             if (column.notNull)
             {
@@ -460,7 +454,7 @@ namespace AnalyzeCode
         
         public void MakeProperty(List<string> strList, Column column, int level, Param param, List<string> importList)
         {
-            Dictionary<string, string> convertDic = GetConvertDic(param);
+            Dictionary<string, string> convertDic = GetConvertDic(param, Converter.DicType.DesignBookType);
         
             string type = GetJavaType(convertDic, column);
             
@@ -573,7 +567,7 @@ namespace AnalyzeCode
             string head = MakeLevel(level) + "<if test=\"entity." + UnderScoreCaseToCamelCase(column.colID) + " != null";
             // 当向Oracle中传""时Oracle会自动将其转换为null, 而Potgresql, SqlServer, MySql会保持为空字符串. 
             // 因此对于一个NotNull字段, Postgresql, MySql和SqlServer中允许传""但Oracle不允许
-            if (column.notNull && GetJavaType(convertDic, column) == "String" && param.GetOne("DatabaseType") == "Oracle")
+            if (param.GetOne("DatabaseType") == "Oracle" && column.notNull && GetJavaType(convertDic, column) == "String")
             {
                 head += " and entity." + UnderScoreCaseToCamelCase(column.colID) + " !=''";
             }
@@ -601,7 +595,7 @@ namespace AnalyzeCode
         
         public void MakeMapperFile(Table table, Param param, string path)
         {
-            Dictionary<string, string> convertDic = GetConvertDic(param);
+            Dictionary<string, string> convertDic = GetConvertDic(param, Converter.DicType.DatabaseType);
         
             List<string> body = new List<string>();
             MakeXmlHeader(body, param);
