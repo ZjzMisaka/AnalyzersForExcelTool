@@ -40,12 +40,60 @@ namespace AnalyzeCode
         
         public static Dictionary<string, string> sqlServerDic = new Dictionary<string, string>() 
         {
-            {"", ""}
+            {"binary", "byte[]"},
+            {"bit", "long"},
+            {"char", "long"},
+            {"date", "long"},
+            {"datetime", "Timestamp"},
+            {"decimal", "long"},
+            {"bigint", "BigDecimal"},
+            {"float", "double"},
+            {"image", "byte[]"},
+            {"int", "int"},
+            {"money", "BigDecimal"},
+            {"nchar", "String"},
+            {"ntext", "String"},
+            {"numeric", "BigDecimal"},
+            {"nvarchar", "long"},
+            {"real", "float"},
+            {"smalldatetime", "Timestamp"},
+            {"smallint", "short"},
+            {"smallmoney", "BigDecimal"},
+            {"text", "String"},
+            {"time", "Time"},
+            {"timestamp", "byte[]"},
+            {"tinyint", "short"},
+            {"udt", "byte[]"},
+            {"uniqueidentifier", "    String"},
+            {"varbinary", "byte[]"},
+            {"varchar", "String"},
+            {"xml", "String"},
+            {"sqlvariant", "Object"},
+            {"geometry", "byte[]"},
+            {"geography", "byte[]"}
         };
         
         public static Dictionary<string, string> mySqlDic = new Dictionary<string, string>() 
         {
-            {"", ""}
+            {"char", "String"},
+            {"varchar", "String"},
+            {"longvarchar", "String"},
+            {"numeric", "BigDecimal"},
+            {"decimal", "BigDecimal"},
+            {"bit", "boolean"},
+            {"tinyint", "byte"},
+            {"smallint", "short"},
+            {"integer", "int"},
+            {"bigint", "long"},
+            {"real", "float"},
+            {"float", "double"},
+            {"double", "double"},
+            {"binary", "byte[]"},
+            {"varbinary", "byte[]"},
+            {"longvarbinary", "byte[]"},
+            {"date", "Date"},
+            {"time", "String"},
+            {"timestamp", "Timestamp"}
         };
         
         public static Dictionary<string, string> oracleDic = new Dictionary<string, string>() 
@@ -507,7 +555,23 @@ namespace AnalyzeCode
             }
             else if (type == "Timestamp")
             {
-                string str = "import java.sql.Timestamp;;";
+                string str = "import java.sql.Timestamp;";
+                if (!importList.Contains(str))
+                {
+                    importList.Add(str);
+                }
+            }
+            else if (type == "Time")
+            {
+                string str = "import java.sql.Time;";
+                if (!importList.Contains(str))
+                {
+                    importList.Add(str);
+                }
+            }
+            else if (type == "Date")
+            {
+                string str = "import java.sql.Date;";
                 if (!importList.Contains(str))
                 {
                     importList.Add(str);
