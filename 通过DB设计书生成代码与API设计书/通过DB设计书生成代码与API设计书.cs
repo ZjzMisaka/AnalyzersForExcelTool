@@ -634,7 +634,12 @@ namespace AnalyzeCode
             List<string> option = param.Get("Option");
             if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && column.notNull && GetJavaType(convertDic, column) == "String")
             {
-                head += " and entity." + UnderScoreCaseToCamelCase(column.colID) + " !=''";
+                head += " and entity." + UnderScoreCaseToCamelCase(column.colID);
+                if (option.Contains("EnableTrim"))
+                {
+                    head += ".trim()";
+                }
+                head += " !=''";
             }
             head += "\">";
             
@@ -644,21 +649,28 @@ namespace AnalyzeCode
         public string MakeLeftEqualRight(Dictionary<string, string> convertDic, Param param, Column column, int level, string str, bool addBack = false)
         {
             string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
+            colStr = ColumnApplyOption(convertDic, param, column, colStr);
+            string res = MakeLevel(level) + (!addBack ? str : "") + column.colID.ToUpper() + " = " + colStr + (addBack ? str : "");
+            
+            return res;
+        }
+        
+        public string ColumnApplyOption(Dictionary<string, string> convertDic, Param param, Column column, string colStr)
+        {
             List<string> option = param.Get("Option");
             // EnableTrim EmptyToNull
+            string res = colStr;
             if (GetJavaType(convertDic, column) == "String")
             {
                 if (option.Contains("EnableTrim"))
                 {
-                    colStr = "TRIM(" + colStr + ")";
+                    res = "TRIM(" + res + ")";
                 }
                 if (option.Contains("EmptyToNull"))
                 {
-                    colStr = "CASE WHEN " + colStr + " = '' THEN NULL ELSE " + colStr + " END";
+                    res = "CASE WHEN " + res + " = '' THEN NULL ELSE " + res + " END";
                 }
             }
-            string res = MakeLevel(level) + (!addBack ? str : "") + column.colID.ToUpper() + " = " + colStr + (addBack ? str : "");
-            
             return res;
         }
         
@@ -923,7 +935,9 @@ namespace AnalyzeCode
                 }
                 else
                 {
-                    body.Add(MakeLevel(3) + "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "},");
+                    string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
+                    colStr = ColumnApplyOption(convertDic, param, column, colStr);
+                    body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
@@ -1035,7 +1049,9 @@ namespace AnalyzeCode
                 }
                 else
                 {
-                    body.Add(MakeLevel(3) + "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "},");
+                    string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
+                    colStr = ColumnApplyOption(convertDic, param, column, colStr);
+                    body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
