@@ -162,6 +162,63 @@ namespace AnalyzeCode
         }
     }
     
+    public class DesignBook
+    {
+        public string name;
+        public string sheetName;
+        public string serviceClassName;
+        public string classDiscription;
+        public List<SqlInfo> sqlInfoList;
+        
+        public DesignBook(Table table)
+        {
+            name = table.tableName + "マスタ";
+            sheetName = table.tableID;
+            serviceClassName = UnderScoreCaseToCamelCase(table.tableID, true) + "ServiceImpl";
+            classDiscription = name + "用Mapperクラス";
+            sqlInfoList = new List<SqlInfo>();
+        }
+        
+        public string UnderScoreCaseToCamelCase(string str, bool isUpperCamelCase = false)
+        {
+            str = str.ToLower().Trim();
+            while (str.Contains("_"))
+            {
+                int index = str.IndexOf('_');
+                string upper = str[index + 1].ToString().ToUpper();
+                str = str.Remove(index, 2);
+                str = str.Insert(index, upper);
+            }
+            
+            if (isUpperCamelCase)
+            {
+                string upper = str[0].ToString().ToUpper();
+                str = str.Remove(0, 1);
+                str = str.Insert(0, upper);
+            }
+            
+            return str;
+        }
+    }
+    
+    public class SqlInfo
+    {
+        public string name;
+        public string discription;
+        public string returnType;
+        public string parameterType;
+        public string parameterName;
+        public string parameterDiscription;
+        
+        public List<SqlBlock> sqlBlockList;
+    }
+    
+    public class SqlBlock
+    {
+        public Dictionary<string, string> sqlBlockColumnInfo;
+        public List<List<string>> sqlBlockLines;
+    }
+    
     public class Analyze
     {
         /// <summary>
@@ -173,7 +230,6 @@ namespace AnalyzeCode
         /// <param name="isExecuteInSequence">是否顺序执行</param>
         public void RunBeforeAnalyzeSheet(Param param, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
         {
-            Output.IsSaveDefaultWorkBook = false;
             globalObject = new List<Table>();
         }
 
@@ -253,11 +309,13 @@ namespace AnalyzeCode
             List<Table> tableList = (List<Table>)globalObject;
             foreach (Table table in tableList)
             {
+                DesignBook designBook = new DesignBook(table);
                 Logger.Info("Making entity: " + table.tableID + ", " + table.tableName + "...");
                 MakeEntityFile(table, param, Output.OutputPath);
                 Logger.Info("Making mapper: " + table.tableID + ", " + table.tableName + "...");
-                MakeMapperFile(table, param, Output.OutputPath);
-                // ConvertMapperIntoExcel
+                MakeMapperFile(table, param, Output.OutputPath, designBook);
+                Logger.Info("Making design book: " + table.tableID + ", " + table.tableName + "...");
+                ConvertMapperIntoExcel(param, workbook, designBook);
             }
         }
 
@@ -626,28 +684,47 @@ namespace AnalyzeCode
         
         /** MAKE MAPPER START **************************************************************************************************/
         
-        public string MakeTestHead(Param param, Dictionary<string, string> convertDic, Column column, int level)
+        public string MakeTestHead(Param param, Dictionary<string, string> convertDic, Column column, int level, List<List<string>> sqlBlockLines)
         {
+            if (sqlBlockLines != null)
+            {
+                sqlBlockLines.Add(new List<string>(){ column.colName, "!=", "null", "and", "〇", "〇", column.colName});
+            }
             string head = MakeLevel(level) + "<if test=\"entity." + UnderScoreCaseToCamelCase(column.colID) + " != null";
             // 当向Oracle中传""时Oracle会自动将其转换为null, 而Potgresql, SqlServer, MySql会保持为空字符串. 
             // 因此对于一个NotNull字段, Postgresql, MySql和SqlServer中允许传""但Oracle不允许
             List<string> option = param.Get("Option");
             if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && column.notNull && GetJavaType(convertDic, column) == "String")
             {
+                string blockLineStr = column.colName;
                 head += " and entity." + UnderScoreCaseToCamelCase(column.colID);
                 if (option.Contains("EnableTrim"))
                 {
                     head += ".trim()";
+                    blockLineStr += ".trim()";
+                }
+                if (option.Contains("EnableFullWidthTrim"))
+                {
+                    head += ".replaceAll('^[　*]*','').replaceAll('[　*]*$','')";
+                    blockLineStr += ".replaceAll('^[　*]*','').replaceAll('[　*]*$','')";
                 }
                 head += " !=''";
+                if (sqlBlockLines != null)
+                {
+                    sqlBlockLines.Add(new List<string>(){ blockLineStr, "!=", "'''", "", "〇", "〇", column.colName});
+                }
             }
             head += "\">";
             
             return head;
         }
         
-        public string MakeLeftEqualRight(Dictionary<string, string> convertDic, Param param, Column column, int level, string str, bool addBack = false)
+        public string MakeLeftEqualRight(Dictionary<string, string> convertDic, Param param, Column column, int level, string str, Table table, List<List<string>> sqlBlockLines, bool addBack = false)
         {
+            if (sqlBlockLines != null)
+            {
+                sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName, "=", ColumnApplyOption(convertDic, param, column, column.colName, true), "AND", "〇", "", column.colName});
+            }
             string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
             colStr = ColumnApplyOption(convertDic, param, column, colStr);
             string res = MakeLevel(level) + (!addBack ? str : "") + column.colID.ToUpper() + " = " + colStr + (addBack ? str : "");
@@ -655,7 +732,7 @@ namespace AnalyzeCode
             return res;
         }
         
-        public string ColumnApplyOption(Dictionary<string, string> convertDic, Param param, Column column, string colStr)
+        public string ColumnApplyOption(Dictionary<string, string> convertDic, Param param, Column column, string colStr, bool forDesignBook = false)
         {
             List<string> option = param.Get("Option");
             // EnableTrim EmptyToNull
@@ -664,18 +741,44 @@ namespace AnalyzeCode
             {
                 if (option.Contains("EnableTrim"))
                 {
-                    res = "TRIM(" + res + ")";
+                    if (!forDesignBook)
+                    {
+                        res = "TRIM(" + res + ")";
+                    }
+                    else
+                    {
+                        res = res + " ※トリムする";
+                    }
+                }
+                if (option.Contains("EnableTrim"))
+                {
+                    if (!forDesignBook)
+                    {
+                        res = "REGEXP_REPLACE(REGEXP_REPLACE(" + res + ", '^[　*]*', ''), '[　*]*$', '')";
+                    }
+                    else
+                    {
+                        res = res + " ※トリムする（全角）";
+                    }
                 }
                 if (option.Contains("EmptyToNull"))
                 {
-                    res = "CASE WHEN " + res + " = '' THEN NULL ELSE " + res + " END";
+                    if (!forDesignBook)
+                    {
+                        res = "CASE WHEN " + res + " = '' THEN NULL ELSE " + res + " END";
+                    }
+                    else
+                    {
+                        res = res + " ※" + res + "はブラックの場合、NULLにする";
+                    }
                 }
             }
             return res;
         }
         
-        public void MakeOrder(List<string> body, int startlevel)
+        public void MakeOrder(List<string> body, int startlevel, List<List<string>> sqlBlockLines)
         {
+            sqlBlockLines.Add(new List<string>(){"パラメーター: orderCol != null and パラメーター: orderCol != ''", "1", "パラメーター: orderCol", "パラメーター: order", "パラメーター: orderCol"});
             body.Add(MakeLevel(startlevel) + "<if test=\"orderCol != null and orderCol !=''\">");
             body.Add(MakeLevel(startlevel + 1) + "ORDER BY ${orderCol}");
             body.Add(MakeLevel(startlevel + 1) + "<if test=\"order != null and order !=''\">");
@@ -684,9 +787,10 @@ namespace AnalyzeCode
             body.Add(MakeLevel(startlevel) + "</if>");
         }
         
-        public void MakeMapperFile(Table table, Param param, string path)
+        public void MakeMapperFile(Table table, Param param, string path, DesignBook designBook)
         {
             Dictionary<string, string> convertDic = GetConvertDic(param, Converter.DicType.DatabaseType);
+            SqlInfo sqlInfo;
         
             List<string> body = new List<string>();
             MakeXmlHeader(body, param);
@@ -696,51 +800,123 @@ namespace AnalyzeCode
             if (!string.IsNullOrWhiteSpace(param.GetOne("UpdateTimeId")))
             {
                 body.Add("");
-                body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "排他チェック処理 -->");
-                MakeExclusiveCheck(body, param, table, convertDic);
+                sqlInfo = new SqlInfo();
+                sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "排他チェック処理";
+                sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+                sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+                sqlInfo.parameterName = "entity";
+                body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+                MakeExclusiveCheck(body, param, table, convertDic, sqlInfo);
+                designBook.sqlInfoList.Add(sqlInfo);
             }
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 *entityパラメータは入力しなくてもよい -->");
-            MakeSelectCount(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "件数の検索 *entityパラメータは入力しなくてもよい";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeSelectCount(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "全検索 -->");
-            MakeSelectAll(body, param, table);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "全検索";
+            sqlInfo.parameterType = "java.lang.String";
+            sqlInfo.parameterDiscription = "ソート情報";
+            sqlInfo.parameterName = "order, orderCol";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeSelectAll(body, param, table, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             if (table.hasPrimaryKey)
             {
                 body.Add("");
-                body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "主キーで検索 -->");
-                MakeSelectByKey(body, param, table, convertDic);
+                sqlInfo = new SqlInfo();
+                sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "主キーで検索";
+                sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+                sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+                sqlInfo.parameterName = "entity";
+                body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+                MakeSelectByKey(body, param, table, convertDic, sqlInfo);
+                designBook.sqlInfoList.Add(sqlInfo);
             }
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 -->");
-            MakeSelect(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeSelect(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 ソートあり -->");
-            MakeSelectWithOrder(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "条件検索 ソートあり";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeSelectWithOrder(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "作成 -->");
-            MakeInsert(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "作成";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeInsert(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             if (table.hasPrimaryKey)
             {
                 body.Add("");
-                body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "削除 -->");
-                MakeDeleteByKey(body, param, table, convertDic);
+                sqlInfo = new SqlInfo();
+                sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "削除";
+                sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+                sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+                sqlInfo.parameterName = "entity";
+                body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+                MakeDeleteByKey(body, param, table, convertDic, sqlInfo);
+                designBook.sqlInfoList.Add(sqlInfo);
             }
             if (table.hasPrimaryKey)
             {
                 body.Add("");
-                body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "更新 -->");
-                MakeUpdateByKey(body, param, table, convertDic);
+                sqlInfo = new SqlInfo();
+                sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "更新";
+                sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+                sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+                sqlInfo.parameterName = "entity";
+                body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+                MakeUpdateByKey(body, param, table, convertDic, sqlInfo);
+                designBook.sqlInfoList.Add(sqlInfo);
             }
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "ページング検索 -->");
-            MakeSelectPage(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "ページング検索";
+            sqlInfo.parameterType = "Object";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ、ソート情報";
+            sqlInfo.parameterName = "entity、orderCol、order";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeSelectPage(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを追加 -->");
-            MakeInsertMultipleByKey(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを追加";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeInsertMultipleByKey(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("");
-            body.Add(MakeLevel(1) + "<!-- " + table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを削除 -->");
-            MakeDeleteMultipleByKey(body, param, table, convertDic);
+            sqlInfo = new SqlInfo();
+            sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "複数のレコードを削除";
+            sqlInfo.parameterType = UnderScoreCaseToCamelCase(table.tableID) + "Entity";
+            sqlInfo.parameterDiscription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : "の") + "エンティティ ";
+            sqlInfo.parameterName = "entity";
+            body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
+            MakeDeleteMultipleByKey(body, param, table, convertDic, sqlInfo);
+            designBook.sqlInfoList.Add(sqlInfo);
             body.Add("</mapper>");
             
             string outputPath = System.IO.Path.Combine(path, UnderScoreCaseToCamelCase(table.tableID, true) + "Mapper.xml");
@@ -766,14 +942,30 @@ namespace AnalyzeCode
             body.Add(MakeLevel(1) + "</resultMap>");
         }
         
-        public void MakeExclusiveCheck(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeExclusiveCheck(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"exclusiveCheck\" resultType=\"java.lang.Integer\">");
-            
+            sqlInfo.name = "exclusiveCheck";
+            sqlInfo.returnType = "java.lang.Integer";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            body.Add(MakeLevel(1) + "<select id=\"" + sqlInfo.name + "\" resultType=\"" + sqlInfo.returnType + "\">");
+            SqlBlock sqlBlock;
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "COUNT(1)" });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "COUNT(1)");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             if (table.hasPrimaryKey)
             {
@@ -787,144 +979,263 @@ namespace AnalyzeCode
                     }
                     if (column.isPrimaryKey)
                     {
-                        body.Add(MakeTestHead(param, convertDic, column, 2));
-                        body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                        body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                        body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                         body.Add(MakeLevel(2) + "</if>");
                     }
                 }
                 
                 if (updateCol != null)
                 {
-                    body.Add(MakeTestHead(param, convertDic, updateCol, 2));
-                    body.Add(MakeLeftEqualRight(convertDic, param, updateCol, 3, "AND "));
+                    body.Add(MakeTestHead(param, convertDic, updateCol, 2, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, updateCol, 3, "AND ", table, sqlBlock.sqlBlockLines));
                     body.Add(MakeLevel(2) + "</if>");
                 }
                 else
                 {
+                    sqlBlock.sqlBlockLines.Add(new List<string>(){ "TODO Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper(), "", "", "", "", ""});
                     body.Add(MakeLevel(2) + "<!-- TODO Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper() + " -->");
                     Logger.Warn("Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper());
                     Logger.Warn("Search <!-- TODO Can't find update time column: " + param.GetOne("UpdateTimeId").ToUpper() + " --> to fix it");
                 }
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelectCount(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeSelectCount(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Count\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultType=\"java.lang.Integer\">");
+            sqlInfo.name = "select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Count";
+            sqlInfo.returnType = "java.lang.Integer";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<select id=\"" + sqlInfo.name + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultType=\"" + sqlInfo.returnType + "\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "COUNT(*)" });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "COUNT(*)");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(3) + "WHERE");
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 3));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND "));
+                body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
                 body.Add(MakeLevel(3) + "</if>");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "</if>");
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelectAll(List<string> body, Param param, Table table)
+        public void MakeSelectAll(List<string> body, Param param, Table table, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"selectAll" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" resultMap=\"ResultMap\">");
+            sqlInfo.name = "selectAll" + UnderScoreCaseToCamelCase(table.tableID, true);
+            sqlInfo.returnType = "ResultMap";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<select id=\"" + sqlInfo.name + "\" resultMap=\"" + sqlInfo.returnType + "\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
-            MakeOrder(body, 2);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"ソート使用ケース", "T"}, {"優先度", "AB"}, {"ソート項目", "AD"}, {"方向", "AN"}, {"対象DBカラム", "AP"}};
+            List<List<string>> sqlBlockLines = new List<List<string>>();
+            MakeOrder(body, 2, sqlBlockLines);
+            sqlBlock.sqlBlockLines = sqlBlockLines;
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelectByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeSelectByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultMap=\"ResultMap\">");
+            sqlInfo.name = "select" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey";
+            sqlInfo.returnType = "ResultMap";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<select id=\"" + sqlInfo.name + "\" parameterType=\"" + sqlInfo.parameterType + "\" resultMap=\"" + sqlInfo.returnType + "\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(param, convertDic, column, 2));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                    body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelect(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeSelect(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\" resultMap=\"ResultMap\">");
+            sqlInfo.name = "select" + UnderScoreCaseToCamelCase(table.tableID, true);
+            sqlInfo.returnType = "ResultMap";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<select id=\""+ sqlInfo.name + "\" parameterType=\"" + sqlInfo.parameterType + "\" resultMap=\"" + sqlInfo.returnType + "\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 2));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                 body.Add(MakeLevel(2) + "</if>");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeSelectWithOrder(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeSelectWithOrder(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "WithOrder\" resultMap=\"ResultMap\">");
+            sqlInfo.name = "select" + UnderScoreCaseToCamelCase(table.tableID, true) + "WithOrder";
+            sqlInfo.returnType = "ResultMap";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<select id=\"" + sqlInfo.name + "\" resultMap=\"" + sqlInfo.returnType +"\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 2));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                 body.Add(MakeLevel(2) + "</if>");
             }
-            MakeOrder(body, 2);
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"ソート使用ケース", "T"}, {"優先度", "AB"}, {"ソート項目", "AD"}, {"方向", "AN"}, {"対象DBカラム", "AP"}};
+            List<List<string>> sqlBlockLines = new List<List<string>>();
+            MakeOrder(body, 2, sqlBlockLines);
+            sqlBlock.sqlBlockLines = sqlBlockLines;
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeInsert(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeInsert(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<insert id=\"insert" + UnderScoreCaseToCamelCase(table.tableID, true) + "\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\">");
-
+            sqlInfo.name = "insert" + UnderScoreCaseToCamelCase(table.tableID, true);
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            
+            body.Add(MakeLevel(1) + "<insert id=\"" + sqlInfo.name + "\" parameterType=\"" + sqlInfo.parameterType + "\">");
+            
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "INSERT INTO");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成項目", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + table.tableID.ToUpper() + " (");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"項目値", "T"}, {"項目タイプ", "AB"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + ") VALUES (");
             foreach (Column column in table.columnList)
@@ -940,107 +1251,197 @@ namespace AnalyzeCode
                     body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "entity.作成項目", "一般項目" });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ GetNowTimestampStr(param), "作成日時、修正日時" });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + ")");
             body.Add(MakeLevel(1) + "</insert>");
         }
         
-        public void MakeDeleteByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeDeleteByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<delete id=\"delete" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\">");
+            sqlInfo.name = "delete" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey";
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            
+            body.Add(MakeLevel(1) + "<delete id=\"" + sqlInfo.name + "\" parameterType=\"" + sqlInfo.parameterType + "\">");
 
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"削除対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "DELETE FROM");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(param, convertDic, column, 2));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                    body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</delete>");
         }
         
-        public void MakeUpdateByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeUpdateByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<update id=\"update" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey\" parameterType=\"" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity\">");
+            sqlInfo.name = "update" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey";
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            
+            body.Add(MakeLevel(1) + "<update id=\"" + sqlInfo.name + "\" parameterType=\"" + sqlInfo.parameterType + "\">");
 
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"更新対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "UPDATE " + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<set>");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"項目値", "T"}, {"項目タイプ", "AB"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             foreach (Column column in table.columnList)
             {
                 if (!column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(param, convertDic, column, 3));
+                    body.Add(MakeTestHead(param, convertDic, column, 3, null));
                     if (column.colID.ToUpper() == param.GetOne("UpdateTimeId").ToUpper())
                     {
                         body.Add(MakeLevel(4) + column.colID.ToUpper() + " = " + GetNowTimestampStr(param) + ", ");
                     }
                     else
                     {
-                        body.Add(MakeLeftEqualRight(convertDic, param, column, 4, ",", true));
+                        body.Add(MakeLeftEqualRight(convertDic, param, column, 4, ",", table, null, true));
                     }
                     body.Add(MakeLevel(3) + "</if>");
                 }
             }
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "entity.作成項目", "一般項目" });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ GetNowTimestampStr(param), "修正日時" });
             body.Add(MakeLevel(2) + "</set>");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "1 = 1");
             foreach (Column column in table.columnList)
             {
                 if (column.isPrimaryKey)
                 {
-                    body.Add(MakeTestHead(param, convertDic, column, 2));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND "));
+                    body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             
             body.Add(MakeLevel(1) + "</update>");
         }
         
-        public void MakeSelectPage(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeSelectPage(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
+            sqlInfo.name = "update" + UnderScoreCaseToCamelCase(table.tableID, true) + "ByKey";
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            
             body.Add(MakeLevel(1) + "<select id=\"select" + UnderScoreCaseToCamelCase(table.tableID, true) + "Page\" resultMap=\"ResultMap\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"取得対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(3) + "WHERE");
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 3));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND "));
+                body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
                 body.Add(MakeLevel(3) + "</if>");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "</if>");
-            MakeOrder(body, 2);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"ソート使用ケース", "T"}, {"優先度", "AB"}, {"ソート項目", "AD"}, {"方向", "AN"}, {"対象DBカラム", "AP"}};
+            List<List<string>> sqlBlockLines = new List<List<string>>();
+            MakeOrder(body, 2, sqlBlockLines);
+            sqlBlock.sqlBlockLines = sqlBlockLines;
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"リミット", "T"}, {"オフセット", "AB"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "LIMIT #{itemPerPage} OFFSET #{offset}");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "itemPerPage" });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "offset" });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(1) + "</select>");
         }
         
-        public void MakeInsertMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeInsertMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<insert id=\"insertMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
+            sqlInfo.name = "insertMultiple" + UnderScoreCaseToCamelCase(table.tableID, true);
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = "List<" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity>";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            
+            body.Add(MakeLevel(1) + "<insert id=\"" + sqlInfo.name + "\">");
+            
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "INSERT INTO");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成項目", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + table.tableID.ToUpper() + " (");
             foreach (Column column in table.columnList)
             {
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
+            
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + ") VALUES");
             body.Add(MakeLevel(2) + "<foreach collection=\"list\" separator=\",\" item=\"entity\" open=\"(\" close=\")\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"項目値", "T"}, {"項目タイプ", "AB"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             foreach (Column column in table.columnList)
             {
                 if (column.colID.ToUpper() == param.GetOne("UpdateTimeId").ToUpper() || column.colID.ToUpper() == param.GetOne("CreateTimeId").ToUpper())
@@ -1054,27 +1455,155 @@ namespace AnalyzeCode
                     body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ "entity.作成項目", "一般項目" });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ GetNowTimestampStr(param), "作成日時、修正日時" });
             body[body.Count - 1] = body[body.Count - 1].Remove(body[body.Count - 1].Length - 1);
             body.Add(MakeLevel(2) + "</foreach>");
             body.Add(MakeLevel(1) + "</insert>");
         }
         
-        public void MakeDeleteMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic)
+        public void MakeDeleteMultipleByKey(List<string> body, Param param, Table table, Dictionary<string, string> convertDic, SqlInfo sqlInfo)
         {
-            body.Add(MakeLevel(1) + "<delete id=\"deleteMultiple" + UnderScoreCaseToCamelCase(table.tableID, true) + "\">");
+            sqlInfo.name = "deleteMultiple" + UnderScoreCaseToCamelCase(table.tableID, true);
+            sqlInfo.returnType = "";
+            sqlInfo.parameterType = "List<" + param.GetOne("EntityPackage") + "." + UnderScoreCaseToCamelCase(table.tableID, true) + "Entity>";
+            sqlInfo.sqlBlockList = new List<SqlBlock>();
+            SqlBlock sqlBlock;
+            body.Add(MakeLevel(1) + "<delete id=\"" + sqlInfo.name + "\">");
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"削除対象", "T"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "DELETE FROM");
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
+            sqlBlock = new SqlBlock();
+            sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"絞込条件項目", "T"}, {"比較条件", "AB"}, {"結合条件項目(テーブル識別名.結合カラム)", "AD"}, {"組合条件", "AL"}, {"必須", "AN"}, {"先決条件", "AP"}, {"対象DBカラム", "AR"}};
+            sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "WHERE");
             body.Add(MakeLevel(2) + "<foreach collection=\"list\" separator=\"or\" item=\"entity\" open=\"(\" close=\")\">");
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 3));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND "));
+                body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
                 body.Add(MakeLevel(3) + "</if>");
             }
+            sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "</foreach>");
             body.Add(MakeLevel(1) + "</delete>");
+        }
+        
+        
+        
+        
+        /** CONVERT MAPPER INTO EXCEL START **************************************************************************************************/
+        public void ConvertMapperIntoExcel(Param param, XLWorkbook workbook, DesignBook designBook)
+        {
+            Logger.Info(param.GetOne("DefaultWorkbookPath"));
+            XLWorkbook defaultWb = new XLWorkbook(param.GetOne("DefaultWorkbookPath"));
+            IXLWorksheet forCopyShee1 = defaultWb.Worksheet("ForCopy1");
+            IXLWorksheet forCopySheet2 = defaultWb.Worksheet("ForCopy2");
+            IXLWorksheet defaultSheet = defaultWb.Worksheet("Base");
+            defaultSheet.Name = designBook.sheetName;
+            workbook.AddWorksheet(defaultSheet);
+            IXLWorksheet sheet = workbook.Worksheet(designBook.sheetName);
+            
+            sheet.Cell("J5").SetValue(designBook.name);
+            sheet.Cell("H7").SetValue(designBook.serviceClassName);
+            sheet.Cell("H11").SetValue(designBook.classDiscription);
+            
+            int nowLine = 13;
+            
+            int sqlInfoIndex = 0;
+            foreach (SqlInfo sqlInfo in designBook.sqlInfoList)
+            {
+                ++sqlInfoIndex;
+                sheet.Cell("B" + nowLine).SetValue(sqlInfoIndex);
+                forCopyShee1.Range("A1", "AX8").CopyTo(sheet.Row(nowLine));
+                nowLine += 1;
+                sheet.Cell("H" + nowLine).SetValue(sqlInfo.name);
+                nowLine += 1;
+                sheet.Cell("H" + nowLine).SetValue(sqlInfo.discription);
+                nowLine += 2;
+                sheet.Cell("K" + nowLine).SetValue(sqlInfo.returnType);
+                nowLine += 1;
+                sheet.Cell("K" + nowLine).SetValue(sqlInfo.parameterType);
+                sheet.Cell("U" + nowLine).SetValue(sqlInfo.parameterName);
+                sheet.Cell("AE" + nowLine).SetValue(sqlInfo.parameterDiscription);
+                nowLine += 2;
+                sheet.Cell("R" + nowLine).SetValue(sqlInfo.name);
+                
+                int sqlBlockIndex = 0;
+                foreach (SqlBlock sqlBlock in sqlInfo.sqlBlockList)
+                {
+                    ++sqlBlockIndex;
+                    Dictionary<string, string> sqlBlockColumnInfo = sqlBlock.sqlBlockColumnInfo;
+                    List<List<string>> sqlBlockLines = sqlBlock.sqlBlockLines;
+                    nowLine += 1;
+                    forCopySheet2.Range("A2", "AX2").CopyTo(sheet.Row(nowLine));
+                    
+                    string nowCol = "T";
+                    List<int> cols = new List<int>();
+                    foreach(string key in sqlBlockColumnInfo.Keys)
+                    {
+                        nowCol = sqlBlockColumnInfo[key];
+                        sheet.Cell(nowCol + nowLine).SetValue(key);
+                        cols.Add(sheet.Column(nowCol).ColumnNumber());
+                    }
+                    for (int i = 0; i < cols.Count; ++i)
+                    {
+                        IXLRange range;
+                        if (cols.Count > i + 1)
+                        {
+                            range = sheet.Range(nowLine, cols[i], nowLine, cols[i + 1] - 1).Merge();
+                        }
+                        else
+                        {
+                            range = sheet.Range(nowLine, cols[i], nowLine, sheet.Column("AW").ColumnNumber()).Merge();
+                        }
+                        range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                        range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    }
+                    
+                    int lineIndex = 0;
+                    foreach(List<string> line in sqlBlockLines)
+                    {
+                        ++lineIndex;
+                        nowLine += 1;
+                        forCopySheet2.Range("A4", "AX4").CopyTo(sheet.Row(nowLine));
+                        sheet.Cell(nowLine, 18).SetValue(lineIndex);
+                        nowCol = "T";
+                        int keyIndex = -1;
+                        foreach(string key in line)
+                        {
+                            ++keyIndex;
+                            sheet.Cell(nowLine, cols[keyIndex]).SetValue(key);
+                        }
+                        
+                        for (int i = 0; i < cols.Count; ++i)
+                        {
+                            IXLRange range;
+                            if (cols.Count > i + 1)
+                            {
+                                range = sheet.Range(nowLine, cols[i], nowLine, cols[i + 1] - 1).Merge();
+                            }
+                            else
+                            {
+                                range = sheet.Range(nowLine, cols[i], nowLine, sheet.Column("AW").ColumnNumber()).Merge();
+                            }
+                            range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                            range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        }
+                    }
+                    
+                    sheet.Range("I" + nowLine, "AW" + nowLine).Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                }
+                
+                nowLine += 1;
+                forCopyShee1.Range("A11", "AX11").CopyTo(sheet.Row(nowLine));
+                nowLine += 1;
+            }
         }
     }
 }
