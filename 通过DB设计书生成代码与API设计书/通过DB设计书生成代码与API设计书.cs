@@ -688,7 +688,7 @@ namespace AnalyzeCode
         {
             if (sqlBlockLines != null)
             {
-                sqlBlockLines.Add(new List<string>(){ column.colName, "!=", "null", "and", "〇", "〇", column.colName});
+                sqlBlockLines.Add(new List<string>(){ "パラメーター.entity." + column.colName, "!=", "null", "and", "〇", "〇", column.colName});
             }
             string head = MakeLevel(level) + "<if test=\"entity." + UnderScoreCaseToCamelCase(column.colID) + " != null";
             // 当向Oracle中传""时Oracle会自动将其转换为null, 而Potgresql, SqlServer, MySql会保持为空字符串. 
@@ -697,7 +697,7 @@ namespace AnalyzeCode
             if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && column.notNull && GetJavaType(convertDic, column) == "String")
             {
                 string blockLineStr = column.colName;
-                head += " and entity." + UnderScoreCaseToCamelCase(column.colID);
+                head += " and パラメーター.entity." + UnderScoreCaseToCamelCase(column.colID);
                 if (option.Contains("EnableTrim") && option.Contains("EnableFullWidthTrim"))
                 {
                     head += ".replaceAll('^[　*| *]*','').replaceAll('[　*| *]*$','')";
@@ -716,7 +716,7 @@ namespace AnalyzeCode
                 head += " !=''";
                 if (sqlBlockLines != null)
                 {
-                    sqlBlockLines.Add(new List<string>(){ blockLineStr, "!=", "'''", "", "〇", "〇", column.colName});
+                    sqlBlockLines.Add(new List<string>(){ blockLineStr, "!=", "''", "", "〇", "〇", column.colName});
                 }
             }
             head += "\">";
@@ -728,7 +728,7 @@ namespace AnalyzeCode
         {
             if (sqlBlockLines != null)
             {
-                sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName, "=", ColumnApplyOption(convertDic, param, column, column.colName, true), "AND", "〇", "", column.colName});
+                sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName, "=", ColumnApplyOption(convertDic, param, column, "パラメーター.entity." + column.colName, true), "AND", "〇", "", column.colName});
             }
             string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
             colStr = ColumnApplyOption(convertDic, param, column, colStr);
@@ -839,7 +839,7 @@ namespace AnalyzeCode
             sqlInfo.discription = table.tableName + (string.IsNullOrWhiteSpace(table.tableName) ? "" : " ") + "全検索";
             sqlInfo.parameterType = "java.lang.String";
             sqlInfo.parameterDiscription = "ソート情報";
-            sqlInfo.parameterName = "order, orderCol";
+            sqlInfo.parameterName = "order、orderCol";
             body.Add(MakeLevel(1) + "<!-- " + sqlInfo.discription + " -->");
             MakeSelectAll(body, param, table, sqlInfo);
             designBook.sqlInfoList.Add(sqlInfo);
@@ -976,7 +976,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1038,7 +1038,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
@@ -1071,7 +1071,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1080,7 +1080,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1106,7 +1106,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1115,7 +1115,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1150,7 +1150,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1159,7 +1159,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1190,7 +1190,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1199,7 +1199,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1237,7 +1237,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成対象", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "INSERT INTO");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             sqlBlock = new SqlBlock();
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成項目", "T"}};
@@ -1245,7 +1245,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + table.tableID.ToUpper() + " (");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(3) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1289,7 +1289,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"削除対象", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "DELETE FROM");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
@@ -1323,7 +1323,7 @@ namespace AnalyzeCode
             sqlBlock = new SqlBlock();
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"更新対象", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "UPDATE " + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<set>");
@@ -1383,7 +1383,7 @@ namespace AnalyzeCode
             body.Add(MakeLevel(2) + "SELECT");
             foreach (Column column in table.columnList)
             {
-                sqlBlock.sqlBlockLines.Add(new List<string>(){ column.colName });
+                sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName });
                 body.Add(MakeLevel(2) + column.colID.ToUpper() + ",");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1392,7 +1392,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"from", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "FROM ");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             body.Add(MakeLevel(2) + "<if test=\"entity != null\">");
@@ -1439,7 +1439,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成対象", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "INSERT INTO");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             sqlBlock = new SqlBlock();
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"作成項目", "T"}};
@@ -1490,7 +1490,7 @@ namespace AnalyzeCode
             sqlBlock.sqlBlockColumnInfo = new Dictionary<string, string>(){{"削除対象", "T"}};
             sqlBlock.sqlBlockLines = new List<List<string>>();
             body.Add(MakeLevel(2) + "DELETE FROM");
-            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName });
+            sqlBlock.sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル" });
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + table.tableID.ToUpper());
             sqlBlock = new SqlBlock();
