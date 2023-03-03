@@ -698,12 +698,17 @@ namespace AnalyzeCode
             {
                 string blockLineStr = column.colName;
                 head += " and entity." + UnderScoreCaseToCamelCase(column.colID);
-                if (option.Contains("EnableTrim"))
+                if (option.Contains("EnableTrim") && option.Contains("EnableFullWidthTrim"))
+                {
+                    head += ".replaceAll('^[　*| *]*','').replaceAll('[　*| *]*$','')";
+                    blockLineStr += ".replaceAll('^[　*| *]*','').replaceAll('[　*| *]*$','')";
+                }
+                else if (option.Contains("EnableTrim"))
                 {
                     head += ".trim()";
                     blockLineStr += ".trim()";
                 }
-                if (option.Contains("EnableFullWidthTrim"))
+                else if (option.Contains("EnableFullWidthTrim"))
                 {
                     head += ".replaceAll('^[　*]*','').replaceAll('[　*]*$','')";
                     blockLineStr += ".replaceAll('^[　*]*','').replaceAll('[　*]*$','')";
@@ -739,7 +744,18 @@ namespace AnalyzeCode
             string res = colStr;
             if (GetJavaType(convertDic, column) == "String")
             {
-                if (option.Contains("EnableTrim"))
+                if (option.Contains("EnableTrim") && option.Contains("EnableFullWidthTrim"))
+                {
+                    if (!forDesignBook)
+                    {
+                        res = res = "REGEXP_REPLACE(REGEXP_REPLACE(" + res + ", '^[　*| *]*', ''), '[　*| *]*$', '')";
+                    }
+                    else
+                    {
+                        res = res + " ※トリムする（半角、全角）";
+                    }
+                }
+                else if (option.Contains("EnableTrim"))
                 {
                     if (!forDesignBook)
                     {
@@ -747,10 +763,10 @@ namespace AnalyzeCode
                     }
                     else
                     {
-                        res = res + " ※トリムする";
+                        res = res + " ※トリムする（半角）";
                     }
                 }
-                if (option.Contains("EnableTrim"))
+                else if (option.Contains("EnableFullWidthTrim"))
                 {
                     if (!forDesignBook)
                     {
