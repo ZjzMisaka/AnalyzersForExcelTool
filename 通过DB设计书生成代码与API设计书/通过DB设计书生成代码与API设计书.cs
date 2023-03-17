@@ -692,9 +692,9 @@ namespace AnalyzeCode
             }
             string head = MakeLevel(level) + "<if test=\"entity." + UnderScoreCaseToCamelCase(column.colID) + " != null";
             // 当向Oracle中传""时Oracle会自动将其转换为null, 而Potgresql, SqlServer, MySql会保持为空字符串. 
-            // 因此对于一个NotNull字段, Postgresql, MySql和SqlServer中允许传""但Oracle不允许
+            // 因此对于一个字段, Postgresql, MySql和SqlServer中允许传""但Oracle不允许
             List<string> option = param.Get("Option");
-            if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && column.notNull && GetJavaType(convertDic, column) == "String")
+            if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && GetJavaType(convertDic, column) == "String")
             {
                 string blockLineStr = column.colName;
                 head += " and パラメーター.entity." + UnderScoreCaseToCamelCase(column.colID);
@@ -724,20 +724,20 @@ namespace AnalyzeCode
             return head;
         }
         
-        public string MakeLeftEqualRight(Dictionary<string, string> convertDic, Param param, Column column, int level, string str, Table table, List<List<string>> sqlBlockLines, bool addBack = false)
+        public string MakeLeftEqualRight(Dictionary<string, string> convertDic, Param param, Column column, int level, string str, Table table, List<List<string>> sqlBlockLines, bool isUpdate, bool addBack = false)
         {
             if (sqlBlockLines != null)
             {
-                sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName, "=", ColumnApplyOption(convertDic, param, column, "パラメーター.entity." + column.colName, true), "AND", "〇", "", column.colName});
+                sqlBlockLines.Add(new List<string>(){ table.tableName + "テーブル." + column.colName, "=", ColumnApplyOption(convertDic, param, column, "パラメーター.entity." + column.colName, isUpdate, true), "AND", "〇", "", column.colName});
             }
             string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
-            colStr = ColumnApplyOption(convertDic, param, column, colStr);
+            colStr = ColumnApplyOption(convertDic, param, column, colStr, isUpdate);
             string res = MakeLevel(level) + (!addBack ? str : "") + column.colID.ToUpper() + " = " + colStr + (addBack ? str : "");
             
             return res;
         }
         
-        public string ColumnApplyOption(Dictionary<string, string> convertDic, Param param, Column column, string colStr, bool forDesignBook = false)
+        public string ColumnApplyOption(Dictionary<string, string> convertDic, Param param, Column column, string colStr, bool isUpdate, bool forDesignBook = false)
         {
             List<string> option = param.Get("Option");
             // EnableTrim EmptyToNull
@@ -777,7 +777,7 @@ namespace AnalyzeCode
                         res = res + " ※トリムする（全角）";
                     }
                 }
-                if (option.Contains("EmptyToNull"))
+                if (isUpdate && option.Contains("EmptyToNull"))
                 {
                     if (!forDesignBook)
                     {
@@ -996,7 +996,7 @@ namespace AnalyzeCode
                     if (column.isPrimaryKey)
                     {
                         body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                        body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                        body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                         body.Add(MakeLevel(2) + "</if>");
                     }
                 }
@@ -1004,7 +1004,7 @@ namespace AnalyzeCode
                 if (updateCol != null)
                 {
                     body.Add(MakeTestHead(param, convertDic, updateCol, 2, sqlBlock.sqlBlockLines));
-                    body.Add(MakeLeftEqualRight(convertDic, param, updateCol, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, updateCol, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                     body.Add(MakeLevel(2) + "</if>");
                 }
                 else
@@ -1050,7 +1050,7 @@ namespace AnalyzeCode
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines, false));
                 body.Add(MakeLevel(3) + "</if>");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1128,7 +1128,7 @@ namespace AnalyzeCode
                 if (column.isPrimaryKey)
                 {
                     body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
@@ -1170,7 +1170,7 @@ namespace AnalyzeCode
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                 body.Add(MakeLevel(2) + "</if>");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1210,7 +1210,7 @@ namespace AnalyzeCode
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                 body.Add(MakeLevel(2) + "</if>");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1263,7 +1263,7 @@ namespace AnalyzeCode
                 else
                 {
                     string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
-                    colStr = ColumnApplyOption(convertDic, param, column, colStr);
+                    colStr = ColumnApplyOption(convertDic, param, column, colStr, true);
                     body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
@@ -1302,7 +1302,7 @@ namespace AnalyzeCode
                 if (column.isPrimaryKey)
                 {
                     body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
@@ -1341,7 +1341,7 @@ namespace AnalyzeCode
                     }
                     else
                     {
-                        body.Add(MakeLeftEqualRight(convertDic, param, column, 4, ",", table, null, true));
+                        body.Add(MakeLeftEqualRight(convertDic, param, column, 4, ",", table, null, true, true));
                     }
                     body.Add(MakeLevel(3) + "</if>");
                 }
@@ -1359,7 +1359,7 @@ namespace AnalyzeCode
                 if (column.isPrimaryKey)
                 {
                     body.Add(MakeTestHead(param, convertDic, column, 2, sqlBlock.sqlBlockLines));
-                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 3, "AND ", table, sqlBlock.sqlBlockLines, false));
                     body.Add(MakeLevel(2) + "</if>");
                 }
             }
@@ -1404,7 +1404,7 @@ namespace AnalyzeCode
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines, false));
                 body.Add(MakeLevel(3) + "</if>");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
@@ -1467,7 +1467,7 @@ namespace AnalyzeCode
                 else
                 {
                     string colStr = "#{entity." + UnderScoreCaseToCamelCase(column.colID) + "}";
-                    colStr = ColumnApplyOption(convertDic, param, column, colStr);
+                    colStr = ColumnApplyOption(convertDic, param, column, colStr, true);
                     body.Add(MakeLevel(3) + colStr + ",");
                 }
             }
@@ -1502,7 +1502,7 @@ namespace AnalyzeCode
             foreach (Column column in table.columnList)
             {
                 body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines));
+                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines, false));
                 body.Add(MakeLevel(3) + "</if>");
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
