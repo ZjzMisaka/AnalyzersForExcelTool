@@ -697,7 +697,7 @@ namespace AnalyzeCode
             if ((param.GetOne("DatabaseType") == "Oracle" || option.Contains("EmptyToNull")) && GetJavaType(convertDic, column) == "String")
             {
                 string blockLineStr = column.colName;
-                head += " and パラメーター.entity." + UnderScoreCaseToCamelCase(column.colID);
+                head += " and entity." + UnderScoreCaseToCamelCase(column.colID);
                 if (option.Contains("EnableTrim") && option.Contains("EnableFullWidthTrim"))
                 {
                     head += ".replaceAll('^[　*| *]*','').replaceAll('[　*| *]*$','')";
