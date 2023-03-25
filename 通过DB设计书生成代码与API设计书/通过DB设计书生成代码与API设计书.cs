@@ -1501,9 +1501,12 @@ namespace AnalyzeCode
             body.Add(MakeLevel(3) + "1 = 1");
             foreach (Column column in table.columnList)
             {
-                body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
-                body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines, false));
-                body.Add(MakeLevel(3) + "</if>");
+                if (column.isPrimaryKey)
+                {
+                    body.Add(MakeTestHead(param, convertDic, column, 3, sqlBlock.sqlBlockLines));
+                    body.Add(MakeLeftEqualRight(convertDic, param, column, 4, "AND ", table, sqlBlock.sqlBlockLines, false));
+                    body.Add(MakeLevel(3) + "</if>");
+                }
             }
             sqlInfo.sqlBlockList.Add(sqlBlock);
             body.Add(MakeLevel(2) + "</foreach>");
