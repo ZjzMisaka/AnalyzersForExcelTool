@@ -431,7 +431,6 @@ namespace AnalyzeCode
             rangeTemp.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
             
             rangeTemp = forCopySheet2.Range("T4", "AW4");
-            rangeTemp.Merge();
             rangeTemp.Style.Border.LeftBorder = XLBorderStyleValues.Thin;
             rangeTemp.Style.Border.RightBorder = XLBorderStyleValues.Thin;
             rangeTemp.Style.Border.TopBorder = XLBorderStyleValues.Thin;
@@ -777,6 +776,7 @@ namespace AnalyzeCode
             rangeTemp.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
             
             rangeTemp = defaultSheet.Range("H8", "AX8");
+            rangeTemp.Merge();
             rangeTemp.Style.Fill.BackgroundColor = XLColor.FromArgb(217, 217, 217);
             rangeTemp.Style.Border.LeftBorder = XLBorderStyleValues.Thin;
             rangeTemp.Style.Border.RightBorder = XLBorderStyleValues.Thin;
@@ -2307,9 +2307,8 @@ namespace AnalyzeCode
                             range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                         }
                     }
-                    
-                    sheet.Range("I" + nowLine, "AW" + nowLine).Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 }
+                sheet.Range("I" + nowLine, "AW" + nowLine).Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 
                 nowLine += 1;
                 ForCopy.forCopySheet1.Range("A11", "AX11").CopyTo(sheet.Row(nowLine));
