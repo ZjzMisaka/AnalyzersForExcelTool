@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using GlobalObjects;
+using GlobalObjects.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -963,8 +964,9 @@ namespace AnalyzeCode
         /// <param name="param">传入的参数</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">将会分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunBeforeAnalyzeSheet(Param param, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunBeforeAnalyzeSheet(Param param, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             globalObject = new List<Table>();
         }
@@ -976,9 +978,10 @@ namespace AnalyzeCode
         /// <param name="sheet">被分析的sheet</param>
         /// <param name="filePath">文件路径</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
         /// <param name="invokeCount">此分析函数被调用的次数</param>
-        public void AnalyzeSheet(Param param, IXLWorksheet sheet, string filePath, ref Object globalObject, bool isExecuteInSequence, int invokeCount)
+        public void AnalyzeSheet(Param param, IXLWorksheet sheet, string filePath, ref Object globalObject, GlobalizationSetter globalizationSetter, bool isExecuteInSequence, int invokeCount)
         {
             Logger.Info("Analysing Sheet: " + sheet.Name + "...");
             
@@ -1024,8 +1027,9 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunBeforeSetResult(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunBeforeSetResult(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             ForCopy.InitSheetForCopy();
         }
@@ -1037,10 +1041,11 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="filePath">文件路径</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
         /// <param name="invokeCount">此输出函数被调用的次数</param>
         /// <param name="totalCount">总共需要调用的输出函数的次数</param>
-        public void SetResult(Param param, XLWorkbook workbook, string filePath, ref Object globalObject, bool isExecuteInSequence, int invokeCount, int totalCount)
+        public void SetResult(Param param, XLWorkbook workbook, string filePath, ref Object globalObject, GlobalizationSetter globalizationSetter, bool isExecuteInSequence, int invokeCount, int totalCount)
         {
             List<Table> tableList = (List<Table>)globalObject;
             foreach (Table table in tableList)
@@ -1062,8 +1067,9 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunEnd(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunEnd(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             
         }

@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using GlobalObjects;
+using GlobalObjects.Model;
 using System;
 using System.IO;
 using System.Collections.Concurrent;
@@ -17,8 +18,9 @@ namespace AnalyzeCode
         /// <param name="param">传入的参数</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">将会分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunBeforeAnalyzeSheet(Param param, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunBeforeAnalyzeSheet(Param param, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             Logger.Info("RunBeforeAnalyze");
             Dictionary<string, Dictionary<string, Tuple<List<IXLRow>, List<double>>>> rowsDic = new Dictionary<string, Dictionary<string, Tuple<List<IXLRow>, List<double>>>>();
@@ -41,14 +43,15 @@ namespace AnalyzeCode
         /// <param name="sheet">被分析的sheet</param>
         /// <param name="filePath">文件路径</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
         /// <param name="invokeCount">此分析函数被调用的次数</param>
-        public void AnalyzeSheet(Param param, IXLWorksheet sheet, string filePath, ref Object globalObject, bool isExecuteInSequence, int invokeCount)
+        public void AnalyzeSheet(Param param, IXLWorksheet sheet, string filePath, ref Object globalObject, GlobalizationSetter globalizationSetter, bool isExecuteInSequence, int invokeCount)
         {
             Logger.Info("AnalyzeSheet" + invokeCount + ": " + sheet.Name + " in " + Path.GetFileName(filePath));
             
-            IXLRow lastUsedRow = sheet.LastRowUsed(true);
-            int lastRowNum = lastUsedRow == null ? 0 : sheet.LastRowUsed(true).RowNumber();
+            IXLRow lastUsedRow = sheet.LastRowUsed();
+            int lastRowNum = lastUsedRow == null ? 0 : sheet.LastRowUsed().RowNumber();
             List<IXLRow> rows = new List<IXLRow>();
             int lastUsedColNum = 0;
             for(int i = 1; i <= lastRowNum; ++i)
@@ -56,7 +59,7 @@ namespace AnalyzeCode
                 IXLRow row = sheet.Row(i);
                 rows.Add(row);
                 
-                IXLCell lastUsedCell = row.LastCellUsed(true);
+                IXLCell lastUsedCell = row.LastCellUsed();
                 
                 int rowLastCellUsedColumnNumber = lastUsedCell == null ? 0 : lastUsedCell.Address.ColumnNumber;
                 
@@ -79,8 +82,9 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunBeforeSetResult(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunBeforeSetResult(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             
         }
@@ -92,10 +96,11 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="filePath">文件路径</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
         /// <param name="invokeCount">此输出函数被调用的次数</param>
         /// <param name="totalCount">总共需要调用的输出函数的次数</param>
-        public void SetResult(Param param, XLWorkbook workbook, string filePath, ref Object globalObject, bool isExecuteInSequence, int invokeCount, int totalCount)
+        public void SetResult(Param param, XLWorkbook workbook, string filePath, ref Object globalObject, GlobalizationSetter globalizationSetter, bool isExecuteInSequence, int invokeCount, int totalCount)
         {
             
         }
@@ -107,8 +112,9 @@ namespace AnalyzeCode
         /// <param name="workbook">用于输出的excel文件</param>
         /// <param name="globalObject">全局存在, 可以保存需要在其他调用时使用的数据, 如当前行号等</param>
         /// <param name="allFilePathList">分析的所有文件路径列表</param>
+        /// <param name="globalizationSetter">获取国际化字符串</param>
         /// <param name="isExecuteInSequence">是否顺序执行</param>
-        public void RunEnd(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, bool isExecuteInSequence)
+        public void RunEnd(Param param, XLWorkbook workbook, ref Object globalObject, List<string> allFilePathList, GlobalizationSetter globalizationSetter, bool isExecuteInSequence)
         {
             Logger.Info("RunEnd");
             
@@ -298,7 +304,7 @@ namespace AnalyzeCode
                     {
                         foreach(IXLRow row in origRows)
                         {
-                            IXLCells cells = row.CellsUsed(true);
+                            IXLCells cells = row.CellsUsed();
                             string value = "";
                             foreach(IXLCell cell in cells)
                             {
@@ -396,7 +402,7 @@ namespace AnalyzeCode
                     {
                         foreach(IXLRow row in revRows)
                         {
-                            IXLCells cells = row.CellsUsed(true);
+                            IXLCells cells = row.CellsUsed();
                             string value = "";
                             foreach(IXLCell cell in cells)
                             {
@@ -633,7 +639,7 @@ namespace AnalyzeCode
                                     }
                                 }
                                 
-                                IXLCell lastCellUsed = row.LastCellUsed(true);
+                                IXLCell lastCellUsed = row.LastCellUsed();
                                     
                                 int copyToColNum = copyStartColNum;
                                 
@@ -766,7 +772,7 @@ namespace AnalyzeCode
                             {
                                 IXLRow row = origRows[diffRes.OrigIndex];
                                 int origStartColNumTemp = origStartColNum;
-                                IXLCell lastCellUsed = row.LastCellUsed(true);
+                                IXLCell lastCellUsed = row.LastCellUsed();
                                 if(lastCellUsed != null)
                                 {
                                     int lastCellUsedColNum = lastCellUsed.Address.ColumnNumber;
@@ -800,7 +806,7 @@ namespace AnalyzeCode
                             {
                                 IXLRow row = revRows[diffRes.RevIndex];
                                 int revStartColNumTemp = revStartColNum;
-                                IXLCell lastCellUsed = row.LastCellUsed(true);
+                                IXLCell lastCellUsed = row.LastCellUsed();
                                 if(lastCellUsed != null)
                                 {
                                     int lastCellUsedColNum = lastCellUsed.Address.ColumnNumber;
@@ -833,7 +839,7 @@ namespace AnalyzeCode
                             ++nowRow;
                         }
                         
-                        IXLRows rowsUsed = diffSheet.RowsUsed(true);
+                        IXLRows rowsUsed = diffSheet.RowsUsed();
                         int nowOrigRow = 1;
                         int nowRevRow = 1;
                         
@@ -1001,7 +1007,7 @@ namespace AnalyzeCode
                     }
                 }
                 
-                IXLColumns colUsedRes = sheet.ColumnsUsed(true);
+                IXLColumns colUsedRes = sheet.ColumnsUsed();
                 foreach(IXLColumn col in colUsedRes)
                 {
                     col.Style.Alignment.WrapText = true;
