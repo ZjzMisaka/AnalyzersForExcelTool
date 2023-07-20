@@ -255,7 +255,7 @@ namespace AnalyzeCode
                 {
                     Logger.Info("Diff: " + name + " in " + fileName + ", total: " + sheetNames.Count + "sheets");
                     
-                    if(sheetNames.Count <= 1)
+                    if(sheetNames.Count == 0)
                     {
                         throw new Exception("无法比较");
                     }
@@ -508,6 +508,7 @@ namespace AnalyzeCode
                         diffSheetName = "..." + diffSheetName.Substring(leaveSheetNameSize - 3);
                     }
                     IXLWorksheet diffSheet = workbook.AddWorksheet(diffFileCount + ". " + diffSheetName);
+                    diffSheet.ShowGridLines = origSheetsRows[name].Item1[0].Worksheet.ShowGridLines;
                     sheet.Cell(sheetNowRow, 1).SetHyperlink(new XLHyperlink(diffSheet.FirstCell()));
                     
                     List<DiffRes> originalDiffResList = DiffTool.Diff(origStrList, revStrList);
